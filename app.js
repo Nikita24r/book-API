@@ -19,6 +19,8 @@ app.use("/poem", require("./Routes/Poem.Route"));
 app.use("/user", require("./Routes/User.Route"));
 app.use("/file", require("./Routes/File.Route"));
 
+app.use("/link", require("./Routes/Link.Route"));
+
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 
