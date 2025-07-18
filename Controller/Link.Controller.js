@@ -1,123 +1,154 @@
-const createError = require('http-errors')
-const Model = require('../Models/Link.Model') // Make sure this model is created
-const mongoose = require('mongoose')
-const ModelName = 'Link'
+const createError = require('http-errors');
+const mongoose = require('mongoose');
+const Model = require('../Models/Link.Model');
+const ModelName = 'Link';
 
 module.exports = {
+  // Create
   create: async (req, res, next) => {
     try {
-      const data = req.body
-      data.created_by = req.user ? req.user._id : 'unauth'
-      data.updated_by = req.user ? req.user._id : 'unauth'
-      data.created_at = Date.now()
-      data.is_active = true
+      const data = req.body;
+      data.created_by = req.user?._id || null;
+      data.updated_by = req.user?._id || null;
+      data.created_at = Date.now();
+      data.updated_at = Date.now();
+      data.is_active = true;
 
-      const newData = new Model(data)
-      const result = await newData.save()
-      res.json(result)
+      const newData = new Model(data);
+      const result = await newData.save();
+
+      res.status(201).json({ success: true, data: result });
     } catch (error) {
-      next(error)
+      next(error);
     }
   },
 
+  // Get by ID
   get: async (req, res, next) => {
     try {
-      const { id } = req.params
-      if (!id) throw createError.BadRequest('Invalid Parameters')
+      const { id } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw createError.BadRequest('Invalid ID');
+      }
 
-      const result = await Model.findById(mongoose.Types.ObjectId(id))
-      if (!result) throw createError.NotFound(`No ${ModelName} Found`)
-      
-      res.json({ success: true, data: result })
+      const result = await Model.findById(id);
+      if (!result) {
+        throw createError.NotFound(`${ModelName} not found`);
+      }
+
+      res.json({ success: true, data: result });
     } catch (error) {
-      next(error)
+      next(error);
     }
   },
 
+  // List (with filtering & pagination)
   list: async (req, res, next) => {
     try {
-      const { title, is_active, page, limit, sort } = req.query
-      const _page = page ? parseInt(page) : 1
-      const _limit = limit ? parseInt(limit) : 20
-      const _skip = (_page - 1) * _limit
-      const _sort = sort || '+title'
+      const { title, is_active = 'true', page = 1, limit = 20, sort = '+title' } = req.query;
 
-      const query = {}
-      if (title) query.title = new RegExp(title, 'i')
-      query.is_active = is_active !== undefined ? is_active === 'true' : true
+      const _page = parseInt(page);
+      const _limit = parseInt(limit);
+      const _skip = (_page - 1) * _limit;
+      const _sortField = sort.replace(/^[-+]/, '');
+      const _sortOrder = sort.startsWith('-') ? -1 : 1;
 
-      const result = await Model.aggregate([
-        { $match: query },
-        { $sort: { title: _sort.startsWith('-') ? -1 : 1 } },
-        { $skip: _skip },
-        { $limit: _limit }
-      ])
-      res.json(result)
+      const query = {
+        is_active: is_active === 'true'
+      };
+
+      if (title) {
+        query.title = new RegExp(title, 'i');
+      }
+
+      const result = await Model.find(query)
+        .sort({ [_sortField]: _sortOrder })
+        .skip(_skip)
+        .limit(_limit);
+
+      res.json({ success: true, data: result });
     } catch (error) {
-      next(error)
+      next(error);
     }
   },
 
+  // Update
   update: async (req, res, next) => {
     try {
-      const { id } = req.params
-      const data = req.body
-      if (!id || !data) throw createError.BadRequest('Invalid Parameters')
+      const { id } = req.params;
+      const data = req.body;
 
-      data.updated_at = Date.now()
-      const result = await Model.updateOne(
-        { _id: mongoose.Types.ObjectId(id) },
-        { $set: data }
-      )
-      res.json(result)
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw createError.BadRequest('Invalid ID');
+      }
+
+      data.updated_by = req.user?._id || null;
+      data.updated_at = Date.now();
+
+      const result = await Model.updateOne({ _id: id }, { $set: data });
+
+      res.json({ success: true, result });
     } catch (error) {
-      next(error)
+      next(error);
     }
   },
 
+  // Soft Delete
   delete: async (req, res, next) => {
     try {
-      const { id } = req.params
-      if (!id) throw createError.BadRequest('Invalid Parameters')
+      const { id } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw createError.BadRequest('Invalid ID');
+      }
 
-      const deleted_at = Date.now()
       const result = await Model.updateOne(
-        { _id: mongoose.Types.ObjectId(id) },
-        { $set: { is_active: false, deleted_at } }
-      )
-      res.json(result)
+        { _id: id },
+        {
+          $set: {
+            is_active: false,
+            deleted_at: Date.now(),
+            updated_by: req.user?._id || null
+          }
+        }
+      );
+
+      res.json({ success: true, message: `${ModelName} soft-deleted`, result });
     } catch (error) {
-      next(error)
+      next(error);
     }
   },
 
+  // Restore
   restore: async (req, res, next) => {
     try {
-      const { id } = req.params
-      if (!id) throw createError.BadRequest('Invalid Parameters')
+      const { id } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw createError.BadRequest('Invalid ID');
+      }
 
-      const dataToBeRestored = await Model.findOne(
-        { _id: mongoose.Types.ObjectId(id) },
-        { title: 1 }
-      ).lean()
+      const existing = await Model.findById(id);
+      if (!existing) {
+        throw createError.NotFound(`${ModelName} not found`);
+      }
 
-      if (!dataToBeRestored) throw createError.NotFound(`${ModelName} Not Found`)
+      if (existing.is_active) {
+        throw createError.Conflict(`${ModelName} is already active`);
+      }
 
-      const existing = await Model.findOne({
-        title: dataToBeRestored.title,
-        is_active: true
-      }).lean()
-
-      if (existing) throw createError.Conflict(`${ModelName} already exists`)
-
-      const restored_at = Date.now()
       const result = await Model.updateOne(
-        { _id: mongoose.Types.ObjectId(id) },
-        { $set: { is_active: true, restored_at } }
-      )
-      res.json(result)
+        { _id: id },
+        {
+          $set: {
+            is_active: true,
+            restored_at: Date.now(),
+            updated_by: req.user?._id || null
+          }
+        }
+      );
+
+      res.json({ success: true, message: `${ModelName} restored`, result });
     } catch (error) {
-      next(error)
+      next(error);
     }
   }
-}
+};
