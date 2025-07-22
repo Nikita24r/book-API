@@ -81,5 +81,39 @@ module.exports = {
     } catch (error) {
       next(error);
     }
+  },
+
+  resetPassword: async (req, res, next) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+      throw createError.BadRequest('Email and new password are required');
+    }
+
+    const user = await BookUser.findOne({ email, is_active: true });
+    if (!user) {
+      throw createError.NotFound('User not found');
+    }
+
+    // Hash the new password
+    const bcrypt = require('bcrypt');
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    user.password = hashedPassword;
+    user.updated_at = Date.now();
+    user.updated_by = 'self';
+
+    await user.save();
+
+    res.send({
+      success: true,
+      message: 'Password reset successfully',
+    });
+  } catch (error) {
+    next(error);
   }
+}
+
 };
