@@ -31,14 +31,12 @@ module.exports = {
 
       const savedUser = await newUser.save();
 
-      const accessToken = await signAccessToken(savedUser._id);
-      const refreshToken = await signRefreshToken(savedUser._id);
+      // const accessToken = await signAccessToken(savedUser._id);
+      // const refreshToken = await signRefreshToken(savedUser._id);
 
       res.status(201).send({
         success: true,
         message: 'User registered successfully',
-        accessToken,
-        refreshToken,
         user: {
           id: savedUser._id,
           name: savedUser.name,
@@ -46,6 +44,7 @@ module.exports = {
         }
       });
     } catch (error) {
+      console.log(error);
       next(error);
     }
   },
@@ -61,11 +60,13 @@ module.exports = {
       const user = await BookUser.findOne({ email, is_active: true }).select('+password');
       if (!user) throw createError.NotFound('User not found');
 
+      console.log(user._id.toString());
+
       const isMatch = await user.isValidPassword(password);
       if (!isMatch) throw createError.Unauthorized('Invalid credentials');
 
-      const accessToken = await signAccessToken(user._id);
-      const refreshToken = await signRefreshToken(user._id);
+      const accessToken = await signAccessToken(user._id.toString());
+      const refreshToken = await signRefreshToken(user._id.toString());
 
       res.send({
         success: true,

@@ -11,7 +11,7 @@ module.exports = {
       const options = {
         expiresIn: '1d',
         issuer: 'pickurpage.com',
-        audience: userId,
+        audience: userId.toString(),
       }
       JWT.sign(payload, secret, options, (err, token) => {
         if (err) {
