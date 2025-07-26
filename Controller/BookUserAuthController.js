@@ -60,6 +60,8 @@ module.exports = {
       const user = await BookUser.findOne({ email, is_active: true }).select('+password');
       if (!user) throw createError.NotFound('User not found');
 
+      console.log(user);
+
       console.log(user._id.toString());
 
       const isMatch = await user.isValidPassword(password);
@@ -84,7 +86,7 @@ module.exports = {
     }
   },
 
-  resetPassword: async (req, res, next) => {
+ resetPassword: async (req, res, next) => {
   try {
     const { email, newPassword } = req.body;
 
@@ -97,12 +99,12 @@ module.exports = {
       throw createError.NotFound('User not found');
     }
 
-    // Let the Mongoose pre-save hook handle hashing
+    // Set plain password, let pre-save hook hash it
     user.password = newPassword;
     user.updated_at = Date.now();
     user.updated_by = 'self';
 
-    await user.save();
+    await user.save(); // triggers pre-save hook
 
     res.send({
       success: true,
