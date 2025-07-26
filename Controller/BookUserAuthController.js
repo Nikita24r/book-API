@@ -97,12 +97,8 @@ module.exports = {
       throw createError.NotFound('User not found');
     }
 
-    // Hash the new password
-    const bcrypt = require('bcrypt');
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-    user.password = hashedPassword;
+    // Let the Mongoose pre-save hook handle hashing
+    user.password = newPassword;
     user.updated_at = Date.now();
     user.updated_by = 'self';
 
@@ -116,5 +112,6 @@ module.exports = {
     next(error);
   }
 }
+
 
 };
